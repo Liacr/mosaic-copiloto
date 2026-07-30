@@ -1,0 +1,31 @@
+# --- Dependências principais do projeto Mosaic ---
+# pip install -r requirements.txt
+
+# Framework de interface web (chat)
+streamlit>=1.38.0
+
+# Orquestração do pipeline e grafo de estados
+langchain>=0.3.0
+langgraph>=0.2.0
+
+# Modelo de embeddings local
+sentence-transformers>=3.0.0
+
+# Cliente do banco de dados Oracle
+oracledb>=2.0.0
+
+# Cliente do Google Gemini
+google-generativeai>=0.8.0
+
+# Leitura de PDFs
+pypdf>=4.0.0
+
+# Parsing de HTML para texto limpo
+beautifulsoup4>=4.12.0
+
+# Utilitários
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Testes
+pytest>=8.0.0

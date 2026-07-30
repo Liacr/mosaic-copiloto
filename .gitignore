@@ -1,0 +1,28 @@
+# Variáveis de ambiente
+.env
+
+# Ambiente virtual Python
+venv/
+.venv/
+env/
+ENV/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Dados brutos do Carbon
+dados/carbon/
+
+# Arquivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs e temporários
+*.log
+tmp/
+temp/
