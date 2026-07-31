@@ -1,0 +1,6 @@
+categoria,responsavel,email,escopo
+tokens de design,Design Ops,designops@mosaiclabs.com,Manter sincronia entre Figma e código; atualizar tokens quando o Carbon lançar nova versão
+componentes,Design Ops,designops@mosaiclabs.com,"Documentar uso correto dos 5 componentes prioritários (Button, Input, Modal, Tooltip, Tag)"
+padrao de codigo,Tech Lead,techlead@mosaiclabs.com,Garantir que o lint e o padrão de código estejam alinhados com o Carbon v11
+acessibilidade,QA,qa@mosaiclabs.com,Validar que novas telas não quebrem diretrizes WCAG antes de ir para produção
+documentacao interna,PM,pm@mosaiclabs.com,Manter guia de arquitetura e padrão de código atualizados
