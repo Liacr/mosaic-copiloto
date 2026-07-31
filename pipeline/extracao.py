@@ -205,29 +205,32 @@ def _extrair_html(caminho: Path, origem: str) -> dict[str, Any] | None:
 
 
 def _detectar_categoria_e_componente(caminho: Path, conteudo: str) -> tuple[str, str | None]:
-    # heuristica simples baseada no nome do arquivo e no texto nao e perfeita,
-    # mas evita ter que classificar cada arquivo na mao. ajustar aqui se
-    # algum documento cair na categoria errada
     nome = caminho.name.lower()
     texto = conteudo.lower()
 
-    componentes_conhecidos = ["button", "input", "text field", "modal", "tooltip", "tag"]
-    componente_detectado = None
-    for comp in componentes_conhecidos:
-        if comp in nome or comp in texto:
-            componente_detectado = comp.replace("text field", "Input").title()
-            if componente_detectado == "Input":
-                componente_detectado = "Input"
-            break
-
-    if "token" in nome or "color" in nome or "spacing" in nome or "typography" in nome:
-        return "tokens", componente_detectado
-
-    if "accessibility" in nome or "a11y" in nome or "wcag" in texto:
-        return "acessibilidade", componente_detectado
-
     if "padrao" in nome or "guia" in nome or "ownership" in nome or "arquitetura" in nome:
-        return "padrao-interno", componente_detectado
+        categoria_por_nome = "padrao-interno"
+    elif "token" in nome or "color" in nome or "spacing" in nome or "typography" in nome:
+        categoria_por_nome = "tokens"
+    elif "accessibility" in nome or "a11y" in nome:
+        categoria_por_nome = "acessibilidade"
+    else:
+        categoria_por_nome = None
+
+    # so marca um componente especifico se so UM foi citado no documento.
+    # se citar varios (tipo lista completa), e documento geral, deixa sem componente
+    componentes_conhecidos = ["button", "input", "text field", "modal", "tooltip", "tag"]
+    encontrados = [c for c in componentes_conhecidos if c in nome or c in texto]
+    if len(encontrados) == 1:
+        componente_detectado = encontrados[0].replace("text field", "Input").title()
+    else:
+        componente_detectado = None
+
+    if categoria_por_nome:
+        return categoria_por_nome, componente_detectado
+
+    if "wcag" in texto:
+        return "acessibilidade", componente_detectado
 
     if componente_detectado:
         return "componentes", componente_detectado
