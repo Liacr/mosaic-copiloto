@@ -1,4 +1,6 @@
-# Lê os documentos (md, json, csv, html) e devolve texto limpo + metadados pra cada um.
+# ETAPA 1: Processamento e Extração
+# Converte cada formato de documento em texto limpo + metadados.
+# JSON de tokens vira frases descritivas, nunca indexamos JSON bruto.
 
 import csv
 import json
@@ -12,13 +14,11 @@ from config.settings import PASTA_CARBON, PASTA_INTERNOS
 
 
 def extrair_todos_documentos() -> list[dict[str, Any]]:
-    """Varre dados/carbon e dados/internos e extrai tudo que reconhece."""
+    """Varre carbon/ e internos/ e retorna lista plana de documentos."""
     documentos = []
-
     documentos.extend(_extrair_pasta(PASTA_INTERNOS, origem="interno-ficticio"))
     documentos.extend(_extrair_pasta(PASTA_CARBON, origem="carbon-oficial"))
-
-    print(f"[Extracao] Total de documentos extraídos: {len(documentos)}")
+    print(f"[Extracao] Total: {len(documentos)} documentos")
     return documentos
 
 
@@ -42,7 +42,7 @@ def _extrair_pasta(caminho_pasta: Path, origem: str) -> list[dict[str, Any]]:
             documento = _extrair_json(caminho_arquivo, origem)
         elif formato == ".csv":
             documento = _extrair_csv(caminho_arquivo, origem)
-        elif formato == ".html" or formato == ".htm":
+        elif formato in (".html", ".htm"):
             documento = _extrair_html(caminho_arquivo, origem)
 
         if documento:
@@ -52,8 +52,6 @@ def _extrair_pasta(caminho_pasta: Path, origem: str) -> list[dict[str, Any]]:
 
 
 def _extrair_markdown(caminho: Path, origem: str) -> dict[str, Any] | None:
-    # mantem os titulos (#, ##) no texto de proposito, ajuda o chunking
-    # a saber onde cada secao comeca
     try:
         conteudo = caminho.read_text(encoding="utf-8")
     except Exception as erro:
@@ -75,8 +73,7 @@ def _extrair_markdown(caminho: Path, origem: str) -> dict[str, Any] | None:
 
 
 def _extrair_json(caminho: Path, origem: str) -> dict[str, Any] | None:
-    # regra importante: nunca indexar o JSON cru como texto, o modelo de
-    # embedding nao entende chave/valor separado -> converte pra frase antes
+    """Converte tokens JSON em frases descritivas, embedding entende linguagem natural, não chaves."""
     try:
         dados = json.loads(caminho.read_text(encoding="utf-8"))
     except Exception as erro:
@@ -100,14 +97,7 @@ def _extrair_json(caminho: Path, origem: str) -> dict[str, Any] | None:
 
 
 def _json_para_frases(dados: Any, contexto: str = "") -> list[str]:
-    """
-    Transforma token em frase legivel.
-    Ex: {"blue-60": {"value": "#0043CE", "role": ["button"]}}
-        -> "Token blue-60 do Carbon Design System, valor #0043CE, usado em button."
-
-    Precisa ser recursiva porque o JSON do Carbon tem token dentro de token
-    (nao sabia disso de inicio, só percebi quando testei com o arquivo real).
-    """
+    """Recursiva: transforma estrutura JSON em frases legíveis para embedding."""
     frases = []
 
     if isinstance(dados, dict):
@@ -117,10 +107,12 @@ def _json_para_frases(dados: Any, contexto: str = "") -> list[str]:
                 papel = valor.get("role", [])
                 papel_texto = ", ".join(papel) if isinstance(papel, list) else str(papel)
 
-                frases.append(
+                frase = (
                     f"Token {chave} do Carbon Design System, "
-                    f"valor {valor_token}, usado em {papel_texto}."
+                    f"valor {valor_token}, "
+                    f"usado em {papel_texto}."
                 )
+                frases.append(frase)
 
                 for sub_chave, sub_valor in valor.items():
                     if sub_chave not in ("value", "role") and isinstance(sub_valor, (dict, list)):
@@ -137,8 +129,7 @@ def _json_para_frases(dados: Any, contexto: str = "") -> list[str]:
 
 
 def _extrair_csv(caminho: Path, origem: str) -> dict[str, Any] | None:
-    # repete o nome da coluna em cada linha (tipo "categoria: tokens | responsavel: ...")
-    # pra o embedding entender o que cada valor significa sozinho
+    """Repete o cabeçalho em cada linha para o embedding entender o significado dos valores."""
     try:
         with caminho.open("r", encoding="utf-8", newline="") as arquivo:
             leitor = csv.DictReader(arquivo)
@@ -153,11 +144,7 @@ def _extrair_csv(caminho: Path, origem: str) -> dict[str, Any] | None:
     colunas = list(linhas[0].keys())
     frases = []
     for linha in linhas:
-        partes = []
-        for coluna in colunas:
-            valor = linha.get(coluna, "")
-            if valor:
-                partes.append(f"{coluna}: {valor}")
+        partes = [f"{coluna}: {linha.get(coluna, '')}" for coluna in colunas if linha.get(coluna)]
         frases.append(" | ".join(partes))
 
     conteudo = "\n".join(frases)
@@ -183,7 +170,6 @@ def _extrair_html(caminho: Path, origem: str) -> dict[str, Any] | None:
         return None
 
     sopa = BeautifulSoup(html_bruto, "html.parser")
-
     for tag_lixo in sopa(["script", "style"]):
         tag_lixo.decompose()
 
@@ -205,34 +191,73 @@ def _extrair_html(caminho: Path, origem: str) -> dict[str, Any] | None:
 
 
 def _detectar_categoria_e_componente(caminho: Path, conteudo: str) -> tuple[str, str | None]:
+    """
+    Heurística: nome do arquivo é mais confiável que o conteúdo.
+    Categoria: prioridade absoluta pelo nome. Só olha o texto se o nome não der pista.
+    Componente: conta quantos componentes diferentes aparecem. Se > 1, é documento geral (None).
+    """
     nome = caminho.name.lower()
     texto = conteudo.lower()
 
-    if "padrao" in nome or "guia" in nome or "ownership" in nome or "arquitetura" in nome:
-        categoria_por_nome = "padrao-interno"
-    elif "token" in nome or "color" in nome or "spacing" in nome or "typography" in nome:
-        categoria_por_nome = "tokens"
-    elif "accessibility" in nome or "a11y" in nome:
-        categoria_por_nome = "acessibilidade"
+    # CATEGORIA (prioridade: nome do arquivo)
+
+    # Tokens: nome do arquivo é a pista mais forte
+    if any(palavra in nome for palavra in ["token", "color", "spacing", "typography", "cores", "espacamento"]):
+        categoria = "tokens"
+
+    # Acessibilidade: só se o PRÓPRIO NOME do arquivo indicar isso
+    elif any(palavra in nome for palavra in ["accessibility", "a11y", "wcag"]):
+        categoria = "acessibilidade"
+
+    # Padrão interno: nome do arquivo indica documentação interna da empresa
+    elif any(palavra in nome for palavra in ["padrao", "guia", "ownership", "arquitetura", "codigo"]):
+        categoria = "padrao-interno"
+
+    # Componente específico: nome do arquivo tem o nome do componente
+    elif any(comp in nome for comp in ["button", "input", "modal", "tooltip", "tag"]):
+        categoria = "componentes"
+
+    # Se o nome do arquivo não deu pista, aí sim consulta o conteúdo
     else:
-        categoria_por_nome = None
+        if any(palavra in texto for palavra in ["token", "color", "spacing", "typography"]):
+            categoria = "tokens"
+        elif any(palavra in texto for palavra in ["accessibility", "a11y", "wcag"]):
+            categoria = "acessibilidade"
+        elif any(palavra in texto for palavra in ["padrao", "guia", "ownership", "arquitetura"]):
+            categoria = "padrao-interno"
+        else:
+            categoria = "componentes"
 
-    # so marca um componente especifico se so UM foi citado no documento.
-    # se citar varios (tipo lista completa), e documento geral, deixa sem componente
-    componentes_conhecidos = ["button", "input", "text field", "modal", "tooltip", "tag"]
-    encontrados = [c for c in componentes_conhecidos if c in nome or c in texto]
-    if len(encontrados) == 1:
-        componente_detectado = encontrados[0].replace("text field", "Input").title()
-    else:
-        componente_detectado = None
+    # COMPONENTE (prioridade: nome do arquivo, depois contagem no texto)
 
-    if categoria_por_nome:
-        return categoria_por_nome, componente_detectado
+    componentes_conhecidos = {
+        "button": "Button",
+        "input": "Input",
+        "text field": "Input",
+        "modal": "Modal",
+        "tooltip": "Tooltip",
+        "tag": "Tag",
+    }
 
-    if "wcag" in texto:
-        return "acessibilidade", componente_detectado
+    # 1º: o nome do arquivo menciona um componente específico?
+    componente_do_nome = None
+    for chave, valor in componentes_conhecidos.items():
+        if chave in nome:
+            componente_do_nome = valor
+            break
 
-    if componente_detectado:
-        return "componentes", componente_detectado
+    if componente_do_nome:
+        return categoria, componente_do_nome
 
-    return "componentes", componente_detectado
+    # 2º: conta quantos componentes diferentes aparecem no TEXTO
+    componentes_encontrados = set()
+    for chave, valor in componentes_conhecidos.items():
+        if chave in texto:
+            componentes_encontrados.add(valor)
+
+    # Se encontrou exatamente 1 componente no texto → marca ele
+    # Se encontrou 0 ou > 1 → é documento geral, marca None
+    if len(componentes_encontrados) == 1:
+        return categoria, componentes_encontrados.pop()
+
+    return categoria, None

@@ -1,0 +1,130 @@
+{
+  "button-primary": {
+    "value": "#0f62fe",
+    "role": ["botão primário", "ação principal"]
+  },
+  "button-primary-hover": {
+    "value": "#0353e9",
+    "role": ["hover do botão primário"]
+  },
+  "button-primary-active": {
+    "value": "#002d9c",
+    "role": ["estado ativo do botão primário"]
+  },
+  "button-secondary": {
+    "value": "#393939",
+    "role": ["botão secundário"]
+  },
+  "button-secondary-hover": {
+    "value": "#4c4c4c",
+    "role": ["hover do botão secundário"]
+  },
+  "button-secondary-active": {
+    "value": "#6f6f6f",
+    "role": ["estado ativo do botão secundário"]
+  },
+  "button-tertiary": {
+    "value": "#0f62fe",
+    "role": ["botão terciário", "borda azul com fundo transparente"]
+  },
+  "button-danger-primary": {
+    "value": "#da1e28",
+    "role": ["botão de perigo primário", "ação destrutiva"]
+  },
+  "button-danger-hover": {
+    "value": "#ba1b23",
+    "role": ["hover do botão de perigo"]
+  },
+  "button-danger-active": {
+    "value": "#750e13",
+    "role": ["estado ativo do botão de perigo"]
+  },
+  "button-disabled": {
+    "value": "#c6c6c6",
+    "role": ["botão desabilitado", "Gray 30"]
+  },
+  "button-separator": {
+    "value": "#e0e0e0",
+    "role": ["separador de botões fluidos", "Gray 20"]
+  },
+  "background": {
+    "value": "#ffffff",
+    "role": ["fundo global do tema White"]
+  },
+  "layer": {
+    "value": "#f4f4f4",
+    "role": ["camada de fundo de componentes", "Gray 10"]
+  },
+  "layer-accent": {
+    "value": "#e0e0e0",
+    "role": ["destaque de camada", "Gray 20"]
+  },
+  "field": {
+    "value": "#f4f4f4",
+    "role": ["fundo de campos de input", "Gray 10"]
+  },
+  "border-subtle": {
+    "value": "#e0e0e0",
+    "role": ["borda sutil", "Gray 20"]
+  },
+  "border-strong": {
+    "value": "#8d8d8d",
+    "role": ["borda forte", "Gray 50"]
+  },
+  "text-primary": {
+    "value": "#161616",
+    "role": ["texto primário", "Gray 100"]
+  },
+  "text-secondary": {
+    "value": "#525252",
+    "role": ["texto secundário", "rótulos", "Gray 70"]
+  },
+  "text-placeholder": {
+    "value": "#a8a8a8",
+    "role": ["texto de placeholder", "Gray 40"]
+  },
+  "text-helper": {
+    "value": "#6f6f6f",
+    "role": ["texto de ajuda", "Gray 60"]
+  },
+  "text-error": {
+    "value": "#da1e28",
+    "role": ["texto de erro", "Red 60"]
+  },
+  "link-primary": {
+    "value": "#0f62fe",
+    "role": ["link primário", "Blue 60"]
+  },
+  "link-primary-hover": {
+    "value": "#0043ce",
+    "role": ["hover do link primário", "Blue 70"]
+  },
+  "icon-primary": {
+    "value": "#161616",
+    "role": ["ícone primário", "Gray 100"]
+  },
+  "icon-secondary": {
+    "value": "#525252",
+    "role": ["ícone secundário", "Gray 70"]
+  },
+  "support-error": {
+    "value": "#da1e28",
+    "role": ["cor de suporte para erro", "Red 60"]
+  },
+  "support-success": {
+    "value": "#24a148",
+    "role": ["cor de suporte para sucesso", "Green 60"]
+  },
+  "support-warning": {
+    "value": "#f1c21b",
+    "role": ["cor de suporte para aviso", "Yellow 30"]
+  },
+  "support-info": {
+    "value": "#0043ce",
+    "role": ["cor de suporte para informação", "Blue 70"]
+  },
+  "focus": {
+    "value": "#0f62fe",
+    "role": ["indicador de foco", "borda de foco", "Blue 60"]
+  }
+}

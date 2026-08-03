@@ -13,9 +13,6 @@ __pycache__/
 *$py.class
 *.so
 
-# Dados brutos do Carbon
-dados/carbon/
-
 # Arquivos de IDE
 .vscode/
 .idea/

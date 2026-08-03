@@ -1,38 +1,58 @@
-# python scripts/testar_extracao.py
-# Imprimir no terminal um resumo de cada documento extraído.
+# Teste das Etapas 1 e 2 — mostra um resumo por arquivo para confirmar que tudo foi processado.
 
 import sys
 from pathlib import Path
 
-# Adiciona a pasta raiz do projeto ao path do Python, para poder importar os módulos
 caminho_raiz = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(caminho_raiz))
 
-from pipeline.extracao import extrair_todos_documentos
+from pipeline.chunking import gerar_todos_chunks
 
 
 def main():
     print("=" * 60)
-    print("TESTE DA ETAPA 1: EXTRAÇÃO DE DOCUMENTOS")
+    print("TESTE: EXTRAÇÃO + CHUNKING")
     print("=" * 60)
 
-    documentos = extrair_todos_documentos()
+    chunks = gerar_todos_chunks()
 
-    print(f"\nTotal de documentos processados: {len(documentos)}\n")
+    # Agrupa chunks por arquivo de origem
+    por_arquivo = {}
+    por_categoria = {}
 
-    for indice, doc in enumerate(documentos, start=1):
-        metadados = doc["metadados"]
-        print(f"--- Documento {indice} ---")
-        print(f"  Arquivo:    {metadados['nome_arquivo']}")
-        print(f"  Origem:     {metadados['origem']}")
-        print(f"  Categoria:  {metadados['categoria']}")
-        print(f"  Componente: {metadados['componente']}")
-        print(f"  Formato:    {metadados['formato']}")
-        print(f"  Tamanho:    {len(doc['conteudo'])} caracteres")
+    for chunk in chunks:
+        nome_arquivo = chunk["metadados"]["nome_arquivo"]
+        categoria = chunk["metadados"]["categoria"]
 
-        amostra = doc["conteudo"][:200].replace("\n", " ")
-        print(f"  Amostra:    {amostra}...")
-        print()
+        if nome_arquivo not in por_arquivo:
+            por_arquivo[nome_arquivo] = {
+                "categoria": categoria,
+                "componente": chunk["metadados"].get("componente"),
+                "origem": chunk["metadados"]["origem"],
+                "formato": chunk["metadados"]["formato"],
+                "total_chunks": 0,
+                "primeiro_chunk": chunk["conteudo"][:250].replace("\n", " "),
+            }
+        por_arquivo[nome_arquivo]["total_chunks"] += 1
+        por_categoria[categoria] = por_categoria.get(categoria, 0) + 1
+
+    print(f"\nTotal de documentos: {len(por_arquivo)}")
+    print(f"Total de chunks: {len(chunks)}\n")
+
+    print("-" * 60)
+    print("RESUMO POR ARQUIVO")
+    print("-" * 60)
+    for nome, info in sorted(por_arquivo.items()):
+        print(f"\n📄 {nome}")
+        print(f"   Origem: {info['origem']} | Categoria: {info['categoria']} | Componente: {info['componente']}")
+        print(f"   Formato: {info['formato']} | Chunks: {info['total_chunks']}")
+        print(f"   Amostra: {info['primeiro_chunk']}...")
+
+    print("\n" + "-" * 60)
+    print("DISTRIBUIÇÃO POR CATEGORIA")
+    print("-" * 60)
+    for cat, qtd in sorted(por_categoria.items()):
+        print(f"  {cat}: {qtd} chunks")
 
 
 if __name__ == "__main__":

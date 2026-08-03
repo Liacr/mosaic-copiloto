@@ -1,0 +1,54 @@
+{
+  "spacing-01": {
+    "value": "2px (0.125rem)",
+    "role": ["espaçamento mínimo", "ajuste fino"]
+  },
+  "spacing-02": {
+    "value": "4px (0.25rem)",
+    "role": ["margem entre label e helper text", "espaçamento pequeno"]
+  },
+  "spacing-03": {
+    "value": "8px (0.5rem)",
+    "role": ["padding interno de botões", "margem de label"]
+  },
+  "spacing-04": {
+    "value": "12px (0.75rem)",
+    "role": ["espaçamento médio-pequeno"]
+  },
+  "spacing-05": {
+    "value": "16px (1rem)",
+    "role": ["padding lateral de inputs", "padding de ícones", "espaçamento padrão"]
+  },
+  "spacing-06": {
+    "value": "24px (1.5rem)",
+    "role": ["padding-bottom de rows em listas", "espaçamento médio"]
+  },
+  "spacing-07": {
+    "value": "32px (2rem)",
+    "role": ["espaçamento entre seções", "espaçamento de layout"]
+  },
+  "spacing-08": {
+    "value": "40px (2.5rem)",
+    "role": ["espaçamento entre componentes"]
+  },
+  "spacing-09": {
+    "value": "48px (3rem)",
+    "role": ["espaçamento de modal", "padding de footer"]
+  },
+  "spacing-10": {
+    "value": "64px (4rem)",
+    "role": ["altura de input fluid", "espaçamento grande"]
+  },
+  "spacing-11": {
+    "value": "80px (5rem)",
+    "role": ["espaçamento de layout amplo"]
+  },
+  "spacing-12": {
+    "value": "96px (6rem)",
+    "role": ["espaçamento entre blocos grandes"]
+  },
+  "spacing-13": {
+    "value": "160px (10rem)",
+    "role": ["espaçamento máximo", "separação de seções principais"]
+  }
+}
