@@ -27,16 +27,21 @@ def chunking_por_estrutura(documento: dict[str, Any]) -> list[dict[str, Any]]:
     return [_criar_chunk(conteudo, metadados_base)]
 
 
+COMPONENTES_CONHECIDOS = ["button", "input", "modal", "tooltip", "tag"]
+
+
 def _chunking_json(conteudo: str, metadados: dict[str, Any]) -> list[dict[str, Any]]:
     """Cada frase de token vira um chunk separado para busca granular."""
     frases = [f.strip() for f in conteudo.split("\n\n") if f.strip()]
     chunks = []
     for frase in frases:
         chunk = _criar_chunk(frase, metadados)
-        # Adiciona o nome do token como componente para filtro mais preciso
+        # Normaliza o prefixo do token para o mesmo padrão de componente do resto do sistema
         if frase.startswith("Token "):
             nome_token = frase.split("Token ")[1].split(" ")[0]
-            chunk["metadados"]["componente"] = nome_token
+            prefixo = nome_token.split("-")[0]
+            if prefixo in COMPONENTES_CONHECIDOS:
+                chunk["metadados"]["componente"] = prefixo.title()
         chunks.append(chunk)
     return chunks
 
