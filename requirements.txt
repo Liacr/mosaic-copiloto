@@ -14,8 +14,8 @@ sentence-transformers>=3.0.0
 # Cliente do banco de dados Oracle
 oracledb>=2.0.0
 
-# Cliente do Google Gemini
-google-generativeai>=0.8.0
+# SDK novo do Google Gemini
+google-genai
 
 # Leitura de PDFs
 pypdf>=4.0.0

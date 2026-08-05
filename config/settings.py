@@ -15,22 +15,29 @@ def pegar_variavel(nome: str, padrao: str = "") -> str:
     return os.getenv(nome, padrao)
 
 
-#Config projeto
+# Config projeto
 NOME_PROJETO = "Mosaic"
 NOME_EMPRESA = "Mosaic Labs"
 
-#Caminhos de pastas
+# Caminhos de pastas
 PASTA_DADOS = caminho_raiz / "dados"
 PASTA_CARBON = PASTA_DADOS / "carbon"
 PASTA_INTERNOS = PASTA_DADOS / "internos"
 
-#Modelo de embedding
+# Modelo de embedding
 MODELO_EMBEDDING = pegar_variavel("MODELO_EMBEDDING", "all-MiniLM-L6-v2")
 
-#API
+# Dimensão do vetor de embedding (all-MiniLM-L6-v2 = 384)
+DIMENSAO_VETOR = 384
+
+# API
 GEMINI_API_KEY = pegar_variavel("GEMINI_API_KEY")
 
-#Banco Oracle
+# Banco Oracle
 ORACLE_USER = pegar_variavel("ORACLE_USER", "ADMIN")
 ORACLE_PASSWORD = pegar_variavel("ORACLE_PASSWORD")
 ORACLE_DSN = pegar_variavel("ORACLE_DSN")
+
+# Wallet do Oracle
+PASTA_WALLET = caminho_raiz / "config" / "wallet"
+ORACLE_WALLET_PASSWORD = pegar_variavel("ORACLE_WALLET_PASSWORD")
