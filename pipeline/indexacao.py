@@ -1,7 +1,5 @@
-# pipeline/indexacao.py
 # ETAPA 3: Indexação Vetorial
-# Gera embeddings com sentence-transformers e grava no Oracle (AI Vector Search).
-# A tabela usa tipo VECTOR para guardar os embeddings e permite busca por similaridade.
+# Singleton para o modelo de embedding (carrega uma única vez).
 
 import array
 import uuid
@@ -11,6 +9,7 @@ import oracledb
 from sentence_transformers import SentenceTransformer
 
 from config.settings import (
+    DIMENSAO_VETOR,
     MODELO_EMBEDDING,
     ORACLE_DSN,
     ORACLE_PASSWORD,
@@ -20,11 +19,21 @@ from config.settings import (
 )
 from pipeline.chunking import gerar_todos_chunks
 
-DIMENSAO_VETOR = 384
+# Singleton: modelo carregado uma única vez na primeira chamada
+_modelo_embedding: SentenceTransformer | None = None
+
+
+def carregar_modelo_embedding() -> SentenceTransformer:
+    """Carrega o modelo uma única vez (singleton)."""
+    global _modelo_embedding
+    if _modelo_embedding is None:
+        print(f"[Indexacao] Carregando modelo {MODELO_EMBEDDING}...")
+        _modelo_embedding = SentenceTransformer(MODELO_EMBEDDING)
+        print("[Indexacao] Modelo carregado e em memória.")
+    return _modelo_embedding
 
 
 def conectar_oracle() -> oracledb.Connection:
-    """Abre conexão com o Oracle usando a wallet (necessária para mTLS)."""
     return oracledb.connect(
         user=ORACLE_USER,
         password=ORACLE_PASSWORD,
@@ -36,12 +45,7 @@ def conectar_oracle() -> oracledb.Connection:
 
 
 def criar_tabela_chunks(conexao: oracledb.Connection) -> None:
-    """
-    Cria a tabela de chunks com coluna VECTOR se ela não existir.
-    Metadados ficam em colunas separadas para permitir filtro antes da busca vetorial.
-    """
     cursor = conexao.cursor()
-
     sql_criar = f"""
     BEGIN
         EXECUTE IMMEDIATE '
@@ -58,7 +62,7 @@ def criar_tabela_chunks(conexao: oracledb.Connection) -> None:
         ';
     EXCEPTION
         WHEN OTHERS THEN
-            IF SQLCODE != -955 THEN  -- -955 = tabela já existe
+            IF SQLCODE != -955 THEN
                 RAISE;
             END IF;
     END;
@@ -70,7 +74,6 @@ def criar_tabela_chunks(conexao: oracledb.Connection) -> None:
 
 
 def limpar_tabela_chunks(conexao: oracledb.Connection) -> None:
-    """Remove todos os registros para reindexação limpa."""
     cursor = conexao.cursor()
     cursor.execute("DELETE FROM chunks_mosaic")
     conexao.commit()
@@ -78,23 +81,12 @@ def limpar_tabela_chunks(conexao: oracledb.Connection) -> None:
     print("[Indexacao] Tabela limpa.")
 
 
-def carregar_modelo_embedding() -> SentenceTransformer:
-    """Carrega o modelo sentence-transformers localmente (primeira vez baixa da internet)."""
-    print(f"[Indexacao] Carregando modelo {MODELO_EMBEDDING}...")
-    return SentenceTransformer(MODELO_EMBEDDING)
-
-
 def indexar_chunks(
     conexao: oracledb.Connection,
     modelo: SentenceTransformer,
     chunks: list[dict[str, Any]],
 ) -> None:
-    """
-    Gera embedding para cada chunk e insere no Oracle.
-    Usa batch para não sobrecarregar a memória.
-    """
     cursor = conexao.cursor()
-
     sql_inserir = """
         INSERT INTO chunks_mosaic (
             id, conteudo, embedding, categoria, origem, componente, nome_arquivo, formato
@@ -167,7 +159,6 @@ def buscar_similar(
     resultados = []
     for row in cursor:
         conteudo = row[1]
-        # CLOB retorna objeto LOB, precisa ler para string
         if hasattr(conteudo, "read"):
             conteudo = conteudo.read()
 
@@ -186,9 +177,7 @@ def buscar_similar(
 
 
 def executar_indexacao_completa() -> None:
-    """Pipeline completo: chunks → embeddings → Oracle."""
     chunks = gerar_todos_chunks()
-
     conexao = conectar_oracle()
     try:
         criar_tabela_chunks(conexao)
@@ -200,6 +189,5 @@ def executar_indexacao_completa() -> None:
         print("[Indexacao] Conexão fechada.")
 
 
-# Teste rápido
 if __name__ == "__main__":
     executar_indexacao_completa()

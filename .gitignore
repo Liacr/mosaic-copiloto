@@ -8,6 +8,7 @@ env/
 ENV/
 
 # Cache do Python
+.pytest_cache/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,3 +26,10 @@ tmp/
 temp/
 
 config/wallet/
+
+# Scripts de teste/desenvolvimento
+scripts/testar_*.py
+scripts/testar_indexacao.py
+
+# Cache do modelo de embedding
+.cache/

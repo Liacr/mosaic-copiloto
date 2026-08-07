@@ -1,4 +1,4 @@
-# --- Dependências principais do projeto Mosaic ---
+# Dependências principais do projeto Mosaic
 # pip install -r requirements.txt
 
 # Framework de interface web (chat)

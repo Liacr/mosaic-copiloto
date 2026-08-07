@@ -5,6 +5,7 @@
 import csv
 import json
 import re
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -12,13 +13,33 @@ from bs4 import BeautifulSoup
 
 from config.settings import PASTA_CARBON, PASTA_INTERNOS
 
+# Mapa explícito de arquivo -> categoria. Prioridade máxima: se o nome do
+# arquivo está aqui, a categoria é essa, ponto final — nunca cai no
+# adivinhador de texto, que é frágil (qualquer doc que MENCIONE a palavra
+# "token" de passagem seria mal classificado).
+CATEGORIA_POR_ARQUIVO = {
+    "componentes-internos.md": "componentes",
+    "design-system-mosaic.md": "design-system",
+    "padrao-css-frontend.md": "padrao-interno",
+    "acessibilidade.md": "acessibilidade",
+    "padrao_codigo.md": "padrao-interno",
+    "guia_arquitetura.md": "padrao-interno",
+    "planilha_ownership.csv": "ownership",
+}
+
 
 def extrair_todos_documentos() -> list[dict[str, Any]]:
     """Varre carbon/ e internos/ e retorna lista plana de documentos."""
     documentos = []
     documentos.extend(_extrair_pasta(PASTA_INTERNOS, origem="interno-ficticio"))
     documentos.extend(_extrair_pasta(PASTA_CARBON, origem="carbon-oficial"))
+
     print(f"[Extracao] Total: {len(documentos)} documentos")
+    print("[Extracao] Arquivo -> categoria (componente):")
+    for doc in documentos:
+        meta = doc["metadados"]
+        print(f"  {meta['nome_arquivo']} -> {meta['categoria']} ({meta.get('componente')})")
+
     return documentos
 
 
@@ -42,8 +63,12 @@ def _extrair_pasta(caminho_pasta: Path, origem: str) -> list[dict[str, Any]]:
             documento = _extrair_json(caminho_arquivo, origem)
         elif formato == ".csv":
             documento = _extrair_csv(caminho_arquivo, origem)
+        elif formato == ".pdf":
+            documento = _extrair_pdf(caminho_arquivo, origem)
         elif formato in (".html", ".htm"):
             documento = _extrair_html(caminho_arquivo, origem)
+        else:
+            print(f"[Extracao] Aviso: formato '{formato}' não tratado, ignorando {caminho_arquivo.name}")
 
         if documento:
             documentos.append(documento)
@@ -162,6 +187,78 @@ def _extrair_csv(caminho: Path, origem: str) -> dict[str, Any] | None:
     }
 
 
+def _extrair_pdf(caminho: Path, origem: str) -> dict[str, Any] | None:
+    """Extrai texto de PDFs usando pypdf (a partir de arquivo no disco)."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        print(f"[Extracao] Aviso: pypdf não instalado. Ignorando {caminho.name}")
+        return None
+
+    try:
+        leitor = PdfReader(str(caminho))
+        paginas = []
+        for pagina in leitor.pages:
+            texto = pagina.extract_text()
+            if texto:
+                paginas.append(texto)
+        conteudo = "\n\n".join(paginas).strip()
+    except Exception as erro:
+        print(f"[Extracao] Erro ao ler PDF {caminho}: {erro}")
+        return None
+
+    if not conteudo:
+        return None
+
+    categoria, componente = _detectar_categoria_e_componente(caminho, conteudo)
+    return {
+        "conteudo": conteudo,
+        "metadados": {
+            "origem": origem,
+            "categoria": categoria,
+            "componente": componente,
+            "nome_arquivo": caminho.name,
+            "formato": "pdf",
+        },
+    }
+
+
+def extrair_pdf_bytes(bytes_io: BytesIO, nome_arquivo: str = "upload.pdf", origem: str = "upload-usuario") -> dict[str, Any] | None:
+    """Extrai texto de PDF a partir de bytes (upload na interface, sem salvar em disco).
+    Retorna o mesmo formato dos outros extratores: {conteudo, metadados}."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        print("[Extracao] Aviso: pypdf não instalado. Não foi possível extrair PDF.")
+        return None
+
+    try:
+        leitor = PdfReader(bytes_io)
+        paginas = []
+        for pagina in leitor.pages:
+            texto = pagina.extract_text()
+            if texto:
+                paginas.append(texto)
+        conteudo = "\n\n".join(paginas).strip()
+    except Exception as erro:
+        print(f"[Extracao] Erro ao ler PDF bytes: {erro}")
+        return None
+
+    if not conteudo:
+        return None
+
+    return {
+        "conteudo": conteudo,
+        "metadados": {
+            "origem": origem,
+            "categoria": "upload",
+            "componente": None,
+            "nome_arquivo": nome_arquivo,
+            "formato": "pdf",
+        },
+    }
+
+
 def _extrair_html(caminho: Path, origem: str) -> dict[str, Any] | None:
     try:
         html_bruto = caminho.read_text(encoding="utf-8")
@@ -192,44 +289,41 @@ def _extrair_html(caminho: Path, origem: str) -> dict[str, Any] | None:
 
 def _detectar_categoria_e_componente(caminho: Path, conteudo: str) -> tuple[str, str | None]:
     """
-    Heurística: nome do arquivo é mais confiável que o conteúdo.
-    Categoria: prioridade absoluta pelo nome. Só olha o texto se o nome não der pista.
-    Componente: conta quantos componentes diferentes aparecem. Se > 1, é documento geral (None).
+    1º: nome do arquivo bate exatamente com o mapa explícito? Usa direto,
+        sem adivinhação nenhuma.
+    2º: só se o arquivo for desconhecido, tenta pelas pistas do nome.
+    3º: só se nada no nome ajudar, tenta pelo conteúdo (menos confiável —
+        por isso é o último recurso, não o primeiro).
     """
     nome = caminho.name.lower()
     texto = conteudo.lower()
 
-    # CATEGORIA (prioridade: nome do arquivo)
-
-    # Tokens: nome do arquivo é a pista mais forte
-    if any(palavra in nome for palavra in ["token", "color", "spacing", "typography", "cores", "espacamento"]):
-        categoria = "tokens"
-
-    # Acessibilidade: só se o PRÓPRIO NOME do arquivo indicar isso
-    elif any(palavra in nome for palavra in ["accessibility", "a11y", "wcag"]):
-        categoria = "acessibilidade"
-
-    # Padrão interno: nome do arquivo indica documentação interna da empresa
-    elif any(palavra in nome for palavra in ["padrao", "guia", "ownership", "arquitetura", "codigo"]):
-        categoria = "padrao-interno"
-
-    # Componente específico: nome do arquivo tem o nome do componente
-    elif any(comp in nome for comp in ["button", "input", "modal", "tooltip", "tag"]):
-        categoria = "componentes"
-
-    # Se o nome do arquivo não deu pista, aí sim consulta o conteúdo
+    # 1º: mapa explícito — resolve de cara os documentos que já conhecemos
+    if caminho.name in CATEGORIA_POR_ARQUIVO:
+        categoria = CATEGORIA_POR_ARQUIVO[caminho.name]
     else:
-        if any(palavra in texto for palavra in ["token", "color", "spacing", "typography"]):
+        # 2º: pistas no nome do arquivo (só pra arquivo não mapeado)
+        if any(p in nome for p in ["token", "color", "spacing", "typography", "cores", "espacamento"]):
             categoria = "tokens"
-        elif any(palavra in texto for palavra in ["accessibility", "a11y", "wcag"]):
+        elif any(p in nome for p in ["accessibility", "a11y", "wcag"]):
             categoria = "acessibilidade"
-        elif any(palavra in texto for palavra in ["padrao", "guia", "ownership", "arquitetura"]):
+        elif any(p in nome for p in ["padrao", "guia", "ownership", "arquitetura", "codigo"]):
             categoria = "padrao-interno"
-        else:
+        elif any(comp in nome for comp in ["button", "input", "modal", "tooltip", "tag"]):
             categoria = "componentes"
+        else:
+            # 3º: último recurso, olha o conteúdo — sabendo que é impreciso
+            print(f"[Extracao] Aviso: '{caminho.name}' não está no mapa nem tem pista no nome — adivinhando pelo conteúdo.")
+            if any(p in texto for p in ["accessibility", "a11y", "wcag"]):
+                categoria = "acessibilidade"
+            elif any(p in texto for p in ["padrao", "guia", "ownership", "arquitetura"]):
+                categoria = "padrao-interno"
+            elif any(p in texto for p in ["token", "color", "spacing", "typography"]):
+                categoria = "tokens"
+            else:
+                categoria = "componentes"
 
-    # COMPONENTE (prioridade: nome do arquivo, depois contagem no texto)
-
+    # COMPONENTE (mesma lógica de antes: nome do arquivo primeiro, depois contagem no texto)
     componentes_conhecidos = {
         "button": "Button",
         "input": "Input",
@@ -239,7 +333,6 @@ def _detectar_categoria_e_componente(caminho: Path, conteudo: str) -> tuple[str,
         "tag": "Tag",
     }
 
-    # 1º: o nome do arquivo menciona um componente específico?
     componente_do_nome = None
     for chave, valor in componentes_conhecidos.items():
         if chave in nome:
@@ -249,14 +342,11 @@ def _detectar_categoria_e_componente(caminho: Path, conteudo: str) -> tuple[str,
     if componente_do_nome:
         return categoria, componente_do_nome
 
-    # 2º: conta quantos componentes diferentes aparecem no TEXTO
     componentes_encontrados = set()
     for chave, valor in componentes_conhecidos.items():
         if chave in texto:
             componentes_encontrados.add(valor)
 
-    # Se encontrou exatamente 1 componente no texto → marca ele
-    # Se encontrou 0 ou > 1 → é documento geral, marca None
     if len(componentes_encontrados) == 1:
         return categoria, componentes_encontrados.pop()
 
