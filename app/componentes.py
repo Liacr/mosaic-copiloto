@@ -127,25 +127,26 @@ def upload_pdf_sidebar():
     # durante reruns do Streamlit (spinner, processamento, etc.)
     if st.session_state.get("pdf_uploaded_nome"):
         nome_pdf = st.session_state.pdf_uploaded_nome
+        status_pdf = st.empty()  # placeholder único: garante que nunca duplica na tela
 
         if st.session_state.get("pdf_consumido"):
-            # PDF já foi consultado — mostra botão de reativar
-            st.markdown(
-                f"📄 **{nome_pdf}** pronto para consulta\n\n"
-                f"> ✅ PDF já consultado. Use o botão abaixo para consultar novamente."
-            )
-            if st.button(
-                "📎 Consultar PDF novamente",
-                use_container_width=True,
-                type="secondary",
-                key="btn_reativar_pdf"
-            ):
-                st.session_state.pdf_consumido = False
-                st.rerun()
+            with status_pdf.container():
+                st.markdown(
+                    f"📄 **{nome_pdf}** pronto para consulta\n\n"
+                    f"> ✅ PDF já consultado. Use o botão abaixo para consultar novamente."
+                )
+                if st.button(
+                    "📎 Consultar PDF novamente",
+                    use_container_width=True,
+                    type="secondary",
+                    key="btn_reativar_pdf",
+                ):
+                    st.session_state.pdf_consumido = False
+                    st.rerun()
         else:
-            # PDF anexado e pronto para ser usado na próxima pergunta
-            st.markdown(
-                f"📄 **{nome_pdf}** pronto para consulta\n\n"
-                f"> ℹ️ O PDF será usado na próxima pergunta\n"
-                f"> 🗑️ Clique no ❌ do campo acima para remover o PDF"
-            )
+            with status_pdf.container():
+                st.markdown(
+                    f"📄 **{nome_pdf}** pronto para consulta\n\n"
+                    f"> ℹ️ O PDF será usado na próxima pergunta\n"
+                    f"> 🗑️ Clique no ❌ do campo acima para remover o PDF"
+                )

@@ -52,7 +52,10 @@ def construir_grafo() -> StateGraph:
             return "gerar_resposta"
 
         contextos = estado.get("contextos", [])
-        distancias_vetoriais = [c["distancia"] for c in contextos if c.get("origem_busca") != "keyword"]
+        distancias_vetoriais = [
+            c.get("distancia_bruta", c["distancia"])
+            for c in contextos if c.get("origem_busca") != "keyword"
+        ]
         if not distancias_vetoriais or min(distancias_vetoriais) > LIMIAR_DISTANCIA_RELEVANTE:
             return "responder_fora_de_escopo"
 

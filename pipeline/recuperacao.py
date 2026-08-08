@@ -101,8 +101,9 @@ def _rerankar(
         # Limita boost maximo a 0.24 (3 palavras) para nao distorcer demais
         boost = min(boost, 0.24)
 
+        candidato["distancia_bruta"] = 1.0 - sim  # SEM boost — usado só pra decisão de fora de escopo
         candidato["similaridade_rerank"] = min(1.0, sim + boost)
-        candidato["distancia"] = 1.0 - candidato["similaridade_rerank"]
+        candidato["distancia"] = 1.0 - candidato["similaridade_rerank"]  # COM boost — usado só pra ordenar
 
     # Ordena por similaridade decrescente
     candidatos_ordenados = sorted(candidatos, key=lambda x: x["similaridade_rerank"], reverse=True)

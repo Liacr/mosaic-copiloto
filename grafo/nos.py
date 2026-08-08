@@ -12,7 +12,7 @@ PADRAO_SAUDACAO = re.compile(
 )
 
 # distância acima disso = a busca não achou nada realmente relevante.
-LIMIAR_DISTANCIA_RELEVANTE = 0.65
+LIMIAR_DISTANCIA_RELEVANTE = 0.54
 
 
 def no_decidir_rota(estado: dict[str, Any]) -> dict[str, Any]:
