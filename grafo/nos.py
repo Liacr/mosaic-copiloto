@@ -59,12 +59,14 @@ def no_gerar_resposta(estado: dict[str, Any]) -> dict[str, Any]:
     incluir_fontes = estado.get("incluir_fontes", True)
     historico = estado.get("historico", "")
     contexto_pdf = estado.get("contexto_pdf")
+    contexto_pdf_nome = estado.get("contexto_pdf_nome")
 
     resultado = gerar_resposta(
         pergunta, contextos,
         incluir_fontes=incluir_fontes,
         historico=historico,
         contexto_pdf=contexto_pdf,
+        contexto_pdf_nome=contexto_pdf_nome,
     )
     return {"resposta_final": resultado["texto"]}
 

@@ -19,3 +19,4 @@ class EstadoMosaic(TypedDict):
     codigo_para_auditar: str | None
     resposta_final: str
     contexto_pdf: str | None   # texto extraído de PDF anexado pelo usuário na sidebar
+    contexto_pdf_nome: str | None

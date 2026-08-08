@@ -98,6 +98,7 @@ def processar_pergunta(pergunta: str, codigo: str | None = None):
         "historico": historico,
         "resposta_final": "",
         "contexto_pdf": st.session_state.get("pdf_texto"),
+        "contexto_pdf_nome": st.session_state.get("pdf_arquivo_nome"),
     }
     return grafo_mosaic.invoke(estado_inicial)
 

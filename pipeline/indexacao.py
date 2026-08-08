@@ -1,5 +1,5 @@
-# ETAPA 3: Indexação Vetorial
-# Singleton para o modelo de embedding (carrega uma única vez).
+# ETAPA 3: Indexacao Vetorial
+# Singleton para o modelo de embedding (carrega uma unica vez).
 
 import array
 import uuid
@@ -19,17 +19,17 @@ from config.settings import (
 )
 from pipeline.chunking import gerar_todos_chunks
 
-# Singleton: modelo carregado uma única vez na primeira chamada
+# Singleton: modelo carregado uma unica vez na primeira chamada
 _modelo_embedding: SentenceTransformer | None = None
 
 
 def carregar_modelo_embedding() -> SentenceTransformer:
-    """Carrega o modelo uma única vez (singleton)."""
+    """Carrega o modelo uma unica vez (singleton)."""
     global _modelo_embedding
     if _modelo_embedding is None:
         print(f"[Indexacao] Carregando modelo {MODELO_EMBEDDING}...")
         _modelo_embedding = SentenceTransformer(MODELO_EMBEDDING)
-        print("[Indexacao] Modelo carregado e em memória.")
+        print("[Indexacao] Modelo carregado e em memoria.")
     return _modelo_embedding
 
 
@@ -46,31 +46,72 @@ def conectar_oracle() -> oracledb.Connection:
 
 def criar_tabela_chunks(conexao: oracledb.Connection) -> None:
     cursor = conexao.cursor()
+    # Dropa a tabela se existir (garante que a estrutura esteja sempre atualizada)
+    try:
+        cursor.execute("DROP TABLE chunks_mosaic")
+        conexao.commit()
+        print("[Indexacao] Tabela antiga removida.")
+    except oracledb.DatabaseError as e:
+        if "ORA-00942" in str(e):  # table does not exist
+            pass
+        else:
+            raise
+
     sql_criar = f"""
-    BEGIN
-        EXECUTE IMMEDIATE '
-            CREATE TABLE chunks_mosaic (
-                id              VARCHAR2(36) PRIMARY KEY,
-                conteudo        CLOB NOT NULL,
-                embedding       VECTOR({DIMENSAO_VETOR}, FLOAT32),
-                categoria       VARCHAR2(50),
-                origem          VARCHAR2(50),
-                componente      VARCHAR2(50),
-                nome_arquivo    VARCHAR2(200),
-                formato         VARCHAR2(20)
-            )
-        ';
-    EXCEPTION
-        WHEN OTHERS THEN
-            IF SQLCODE != -955 THEN
-                RAISE;
-            END IF;
-    END;
+        CREATE TABLE chunks_mosaic (
+            id              VARCHAR2(36) PRIMARY KEY,
+            conteudo        CLOB NOT NULL,
+            embedding       VECTOR({DIMENSAO_VETOR}, FLOAT32),
+            categoria       VARCHAR2(50),
+            origem          VARCHAR2(50),
+            componente      VARCHAR2(50),
+            nome_arquivo    VARCHAR2(200),
+            formato         VARCHAR2(20),
+            secao           VARCHAR2(200),
+            pagina          NUMBER,
+            data_doc        VARCHAR2(20),
+            autor           VARCHAR2(100)
+        )
     """
     cursor.execute(sql_criar)
     conexao.commit()
     cursor.close()
-    print("[Indexacao] Tabela chunks_mosaic pronta.")
+    print("[Indexacao] Tabela chunks_mosaic criada com sucesso.")
+
+
+def criar_indices(conexao: oracledb.Connection) -> None:
+    """Cria indices para busca eficiente: vetorial (IVF) e em metadados."""
+    cursor = conexao.cursor()
+
+    # Indice IVF no vetor para busca aproximada rapida
+    try:
+        cursor.execute(f"""
+            CREATE VECTOR INDEX idx_chunks_embedding ON chunks_mosaic(embedding)
+            ORGANIZATION NEIGHBOR PARTITIONS
+            DISTANCE COSINE
+            WITH TARGET ACCURACY 95
+        """)
+        conexao.commit()
+        print("[Indexacao] Indice vetorial IVF criado.")
+    except oracledb.DatabaseError as e:
+        if "ORA-00955" in str(e) or "ORA-02303" in str(e):
+            print("[Indexacao] Indice vetorial ja existe.")
+        else:
+            print(f"[Indexacao] Aviso: nao foi possivel criar indice IVF: {e}")
+            print("[Indexacao] A busca vetorial continuara funcionando (sem indice aproximado).")
+
+    # Indice tradicional na categoria para filtragem rapida
+    try:
+        cursor.execute("CREATE INDEX idx_chunks_categoria ON chunks_mosaic(categoria)")
+        conexao.commit()
+        print("[Indexacao] Indice em categoria criado.")
+    except oracledb.DatabaseError as e:
+        if "ORA-00955" in str(e):
+            print("[Indexacao] Indice em categoria ja existe.")
+        else:
+            raise
+
+    cursor.close()
 
 
 def limpar_tabela_chunks(conexao: oracledb.Connection) -> None:
@@ -89,13 +130,15 @@ def indexar_chunks(
     cursor = conexao.cursor()
     sql_inserir = """
         INSERT INTO chunks_mosaic (
-            id, conteudo, embedding, categoria, origem, componente, nome_arquivo, formato
+            id, conteudo, embedding, categoria, origem, componente, nome_arquivo,
+            formato, secao, pagina, data_doc, autor
         ) VALUES (
-            :1, :2, :3, :4, :5, :6, :7, :8
+            :1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12
         )
     """
 
-    textos = [chunk["conteudo"] for chunk in chunks]
+    # CORRECAO: usa conteudo_embed para embedding, mas salva conteudo original no banco
+    textos = [chunk.get("conteudo_embed", chunk["conteudo"]) for chunk in chunks]
     print(f"[Indexacao] Gerando embeddings para {len(textos)} chunks...")
     embeddings = modelo.encode(textos, show_progress_bar=True)
 
@@ -111,6 +154,10 @@ def indexar_chunks(
             meta.get("componente"),
             meta.get("nome_arquivo"),
             meta.get("formato"),
+            meta.get("secao"),
+            meta.get("pagina"),
+            meta.get("data"),
+            meta.get("autor"),
         ))
 
     tamanho_batch = 100
@@ -121,7 +168,7 @@ def indexar_chunks(
         print(f"[Indexacao] Inseridos {min(i + tamanho_batch, len(registros))}/{len(registros)}")
 
     cursor.close()
-    print("[Indexacao] Indexação completa.")
+    print("[Indexacao] Indexacao completa.")
 
 
 def buscar_similar(
@@ -139,6 +186,7 @@ def buscar_similar(
     if categoria:
         sql = """
             SELECT id, conteudo, categoria, origem, componente, nome_arquivo,
+                   secao, pagina, data_doc, autor,
                    COSINE_DISTANCE(embedding, :vetor) as distancia
             FROM chunks_mosaic
             WHERE categoria = :categoria
@@ -149,6 +197,7 @@ def buscar_similar(
     else:
         sql = """
             SELECT id, conteudo, categoria, origem, componente, nome_arquivo,
+                   secao, pagina, data_doc, autor,
                    COSINE_DISTANCE(embedding, :vetor) as distancia
             FROM chunks_mosaic
             ORDER BY COSINE_DISTANCE(embedding, :vetor)
@@ -169,7 +218,11 @@ def buscar_similar(
             "origem": row[3],
             "componente": row[4],
             "nome_arquivo": row[5],
-            "distancia": row[6],
+            "secao": row[6],
+            "pagina": row[7],
+            "data_doc": row[8],
+            "autor": row[9],
+            "distancia": row[10],
         })
 
     cursor.close()
@@ -181,12 +234,12 @@ def executar_indexacao_completa() -> None:
     conexao = conectar_oracle()
     try:
         criar_tabela_chunks(conexao)
-        limpar_tabela_chunks(conexao)
         modelo = carregar_modelo_embedding()
         indexar_chunks(conexao, modelo, chunks)
+        criar_indices(conexao)
     finally:
         conexao.close()
-        print("[Indexacao] Conexão fechada.")
+        print("[Indexacao] Conexao fechada.")
 
 
 if __name__ == "__main__":

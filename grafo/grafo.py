@@ -46,14 +46,14 @@ def construir_grafo() -> StateGraph:
         if estado.get("codigo_para_auditar"):
             return "auditar_e_responder"
 
-        # CORRECAO: se o usuario anexou um PDF, sempre responde —
+        # Se o usuario anexou um PDF, sempre responde —
         # mesmo que a busca vetorial na base nao ache nada relevante.
-        # A pergunta pode ser 100% sobre o conteudo do PDF.
         if estado.get("contexto_pdf"):
             return "gerar_resposta"
 
-        distancias = [c.get("distancia", 1.0) for c in estado.get("contextos", [])]
-        if not distancias or min(distancias) > LIMIAR_DISTANCIA_RELEVANTE:
+        contextos = estado.get("contextos", [])
+        distancias_vetoriais = [c["distancia"] for c in contextos if c.get("origem_busca") != "keyword"]
+        if not distancias_vetoriais or min(distancias_vetoriais) > LIMIAR_DISTANCIA_RELEVANTE:
             return "responder_fora_de_escopo"
 
         return "gerar_resposta"

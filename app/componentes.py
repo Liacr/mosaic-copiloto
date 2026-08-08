@@ -108,7 +108,4 @@ def upload_pdf_sidebar():
 
     if st.session_state.get("pdf_arquivo_nome"):
         st.caption(f"📄 {st.session_state.pdf_arquivo_nome} pronto para consulta")
-        if st.button("🗑️ Limpar PDF", key="limpar_pdf"):
-            st.session_state.pdf_texto = None
-            st.session_state.pdf_arquivo_nome = None
-            st.rerun()
+        st.caption("Clique no ❌ do campo acima para remover o PDF da conversa")
