@@ -33,3 +33,4 @@ scripts/testar_indexacao.py
 
 # Cache do modelo de embedding
 tests/
+docker-compose.yml
