@@ -74,10 +74,22 @@ def botao_auditoria_persistente():
 
 
 def upload_pdf_sidebar():
-    """Upload de PDF na sidebar — extrai texto na hora e guarda em session_state.
-    O conteúdo vai como contexto extra na próxima pergunta, sem indexar no banco."""
-    # Import lazy: só roda quando a função é chamada (sys.path já tá configurado pelo interface.py)
+    """
+    Upload de PDF na sidebar.
+
+    CORRECAO: separa o estado do UPLOAD (persistente no sidebar) do estado
+    da CONSULTA ATIVA (usado apenas na pergunta atual). Isso evita que o
+    PDF "vaze" automaticamente para perguntas de follow-up depois de já
+    ter sido consumido.
+
+    Fluxo:
+    1. Usuário faz upload → salva em pdf_uploaded_texto / pdf_uploaded_nome
+    2. Usuário pergunta algo → interface.py copia para pdf_texto / pdf_arquivo_nome
+    3. Resposta processada → finally limpa pdf_texto / pdf_arquivo_nome
+    4. Próxima pergunta → NÃO mostra indicador do PDF (a menos que reative)
+    """
     from pipeline.extracao import extrair_pdf_bytes
+    from io import BytesIO
 
     st.divider()
     st.markdown("**🗂️ Anexar PDF**")
@@ -85,27 +97,55 @@ def upload_pdf_sidebar():
 
     arquivo = st.file_uploader("Escolha um PDF", type=["pdf"], key="pdf_upload_sidebar")
 
+    # Estado do upload (persistente enquanto o arquivo estiver no uploader)
     if arquivo is not None:
-        # Extrai texto uma única vez, só quando muda o arquivo
-        if st.session_state.get("pdf_arquivo_nome") != arquivo.name:
-            from io import BytesIO
+        # Só extrai se mudou o arquivo
+        if st.session_state.get("pdf_uploaded_nome") != arquivo.name:
             bytes_io = BytesIO(arquivo.getvalue())
             resultado = extrair_pdf_bytes(bytes_io, nome_arquivo=arquivo.name)
             if resultado:
-                st.session_state.pdf_texto = resultado["conteudo"]
-                st.session_state.pdf_arquivo_nome = arquivo.name
+                st.session_state.pdf_uploaded_texto = resultado["conteudo"]
+                st.session_state.pdf_uploaded_nome = arquivo.name
+                st.session_state.pdf_consumido = False  # marca como não consumido
                 st.success(f"✅ {arquivo.name} anexado")
             else:
                 st.error("❌ Não consegui extrair texto desse PDF.")
-                st.session_state.pdf_texto = None
-                st.session_state.pdf_arquivo_nome = None
+                st.session_state.pdf_uploaded_texto = None
+                st.session_state.pdf_uploaded_nome = None
     else:
-        # Se o usuário limpou o uploader, limpa o estado também
-        if st.session_state.get("pdf_arquivo_nome") and not arquivo:
+        # Usuário removeu o arquivo do uploader
+        if st.session_state.get("pdf_uploaded_nome"):
+            st.session_state.pdf_uploaded_texto = None
+            st.session_state.pdf_uploaded_nome = None
+            st.session_state.pdf_consumido = False
+            # Limpa também o estado de consulta ativa, se existir
             st.session_state.pdf_texto = None
             st.session_state.pdf_arquivo_nome = None
             st.rerun()
 
-    if st.session_state.get("pdf_arquivo_nome"):
-        st.caption(f"📄 {st.session_state.pdf_arquivo_nome} pronto para consulta")
-        st.caption("Clique no ❌ do campo acima para remover o PDF da conversa")
+    # CORRECAO: bloco único de markdown para evitar duplicação de captions
+    # durante reruns do Streamlit (spinner, processamento, etc.)
+    if st.session_state.get("pdf_uploaded_nome"):
+        nome_pdf = st.session_state.pdf_uploaded_nome
+
+        if st.session_state.get("pdf_consumido"):
+            # PDF já foi consultado — mostra botão de reativar
+            st.markdown(
+                f"📄 **{nome_pdf}** pronto para consulta\n\n"
+                f"> ✅ PDF já consultado. Use o botão abaixo para consultar novamente."
+            )
+            if st.button(
+                "📎 Consultar PDF novamente",
+                use_container_width=True,
+                type="secondary",
+                key="btn_reativar_pdf"
+            ):
+                st.session_state.pdf_consumido = False
+                st.rerun()
+        else:
+            # PDF anexado e pronto para ser usado na próxima pergunta
+            st.markdown(
+                f"📄 **{nome_pdf}** pronto para consulta\n\n"
+                f"> ℹ️ O PDF será usado na próxima pergunta\n"
+                f"> 🗑️ Clique no ❌ do campo acima para remover o PDF"
+            )

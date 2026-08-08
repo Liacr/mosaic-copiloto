@@ -35,6 +35,16 @@ def inicializar_sessao():
         st.session_state.pergunta_para_auditar = ""
     if "feedbacks" not in st.session_state:
         st.session_state.feedbacks = {}
+
+    # Estados do PDF (separados)
+    # pdf_uploaded_* = persistem no sidebar enquanto o arquivo estiver lá
+    # pdf_texto / pdf_arquivo_nome = consulta ATIVA (só para a pergunta atual)
+    if "pdf_uploaded_texto" not in st.session_state:
+        st.session_state.pdf_uploaded_texto = None
+    if "pdf_uploaded_nome" not in st.session_state:
+        st.session_state.pdf_uploaded_nome = None
+    if "pdf_consumido" not in st.session_state:
+        st.session_state.pdf_consumido = False
     if "pdf_texto" not in st.session_state:
         st.session_state.pdf_texto = None
     if "pdf_arquivo_nome" not in st.session_state:
@@ -66,7 +76,6 @@ def _formatar_historico_para_prompt(mensagens: list[dict]) -> str:
 
 def _renderizar_resposta_com_fontes(texto: str):
     """Separa o conteúdo principal das fontes e coloca as fontes em expander."""
-    # Procura por "Fonte:" ou "Fontes:" no texto (com quebras de linha opcionais antes)
     padrao = re.compile(r"\n?\n?(?:Fonte|Fontes):\s*(.+)", re.DOTALL)
     match = padrao.search(texto)
 
@@ -86,6 +95,9 @@ def _renderizar_resposta_com_fontes(texto: str):
 
 def processar_pergunta(pergunta: str, codigo: str | None = None):
     historico = _formatar_historico_para_prompt(st.session_state.mensagens)
+
+    # CORRECAO: usa o estado de CONSULTA ATIVA (pdf_texto / pdf_arquivo_nome)
+    # que foi preenchido no momento da pergunta, NAO o estado do sidebar
     estado_inicial = {
         "mensagens": [],
         "pergunta_atual": pergunta,
@@ -129,7 +141,7 @@ def main():
             else:
                 st.markdown(msg["conteudo"])
 
-            # CORREÇÃO: botão de feedback só nas respostas do assistente
+            # CORRECAO: botão de feedback só nas respostas do assistente
             if msg["papel"] == "assistente":
                 msg_id = msg["id"]
                 feedback_atual = st.session_state.feedbacks.get(msg_id)
@@ -169,13 +181,13 @@ def main():
             st.session_state.pergunta_para_processar = None
             st.session_state.codigo_para_processar = None
 
-            # PDF é consulta pontual, some depois de UMA resposta, não
-            # fica valendo pro resto da sessão (senão o bypass do
-            # roteamento_pos_contexto continua ativo pra qualquer pergunta
-            # seguinte, mesmo sem relação nenhuma com o PDF)
+            # CORRECAO: PDF é consulta pontual — limpa o estado de CONSULTA ATIVA
+            # e marca como consumido. O estado do sidebar (pdf_uploaded_*) continua
+            # intacto até o usuário remover o arquivo.
             if codigo is None and st.session_state.get("pdf_texto"):
                 st.session_state.pdf_texto = None
                 st.session_state.pdf_arquivo_nome = None
+                st.session_state.pdf_consumido = True
 
         st.rerun()
 
@@ -185,10 +197,24 @@ def main():
     pergunta = pergunta_sugerida or pergunta
 
     if pergunta and not st.session_state.processando:
-        # Se tiver PDF anexado, mostra indicador discreto na mensagem do usuário
-        if st.session_state.get("pdf_arquivo_nome"):
+        # CORRECAO: decide se ativa o PDF para ESTA consulta
+        # Só ativa se:
+        # 1. Existe um PDF no sidebar (pdf_uploaded_texto)
+        # 2. O PDF ainda NÃO foi consumido (pdf_consumido == False)
+        pdf_ativo = (
+            st.session_state.get("pdf_uploaded_texto")
+            and st.session_state.get("pdf_uploaded_nome")
+            and not st.session_state.get("pdf_consumido", False)
+        )
+
+        if pdf_ativo:
+            # Copia do estado do sidebar para o estado de consulta ativa
+            st.session_state.pdf_texto = st.session_state.pdf_uploaded_texto
+            st.session_state.pdf_arquivo_nome = st.session_state.pdf_uploaded_nome
             pergunta_com_pdf = f"{pergunta}\n\n*(📎 consultando com: {st.session_state.pdf_arquivo_nome})*"
         else:
+            st.session_state.pdf_texto = None
+            st.session_state.pdf_arquivo_nome = None
             pergunta_com_pdf = pergunta
 
         adicionar_mensagem("usuario", pergunta_com_pdf)
