@@ -32,4 +32,4 @@ scripts/testar_*.py
 scripts/testar_indexacao.py
 
 # Cache do modelo de embedding
-.cache/
+tests/
