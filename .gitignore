@@ -6,6 +6,7 @@ venv/
 .venv/
 env/
 ENV/
+.env.example
 
 # Cache do Python
 .pytest_cache/
